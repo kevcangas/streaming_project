@@ -1,0 +1,55 @@
+version: '3'
+services:
+  
+  # --- EL BROKER DE MENSAJES ---
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # CONFIGURACIÓN KRAFT (Sin Zookeeper)
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      
+      # LISTENERS (Puertos)
+      # CONTROLLER: Puerto interno para gestión (9093)
+      # CLIENT: Para Spark (29092)
+      # EXTERNAL: Para tu PC (9092)
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:9093,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      
+      # IMPORTANTE: Replicación a 1 para que no falle al estar solo
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+  # --- DATA LAKE (S3 SIMULADO) ---
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: "admin"
+      MINIO_ROOT_PASSWORD: "password123"
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./minio_data:/data
+
+  # --- CONTENEDOR PARA TUS SCRIPTS PYTHON ---
+  app:
+    build: ./files
+    volumes:
+      - ./files/source:/app
+    command: tail -f /dev/null # Mantiene el contenedor vivo para que entres a ejecutar cosas
+    environment:
+      AWS_ACCESS_KEY_ID: "admin"
+      AWS_SECRET_ACCESS_KEY: "password123"
+      S3_ENDPOINT_URL: "http://minio:9000"
+    depends_on:
+      - kafka
+      - minio

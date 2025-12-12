@@ -1,0 +1,6 @@
+kafka-python
+polars
+boto3
+s3fs
+pyarrow
+faker  # Para generar datos falsos realistas
